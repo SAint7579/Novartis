@@ -1,0 +1,3 @@
+[submodule "DRUG-seq"]
+	path = DRUG-seq
+	url = https://github.com/Novartis/DRUG-seq
