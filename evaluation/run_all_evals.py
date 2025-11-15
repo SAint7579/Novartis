@@ -18,7 +18,8 @@ print()
 
 evaluations = [
     ("1. Latent Space Visualization", "evaluation/visualize_all_models.py"),
-    ("2. Perturbation Prediction", "evaluation/evaluate_perturbation_prediction.py"),
+    ("2. Top-k Retrieval Metrics", "evaluation/evaluate_topk_fast.py"),
+    ("3. Perturbation Prediction", "evaluation/evaluate_perturbation_prediction.py"),
 ]
 
 for name, script in evaluations:
@@ -36,5 +37,6 @@ print(f"All Evaluations Complete!")
 print(f"{'='*70}")
 print(f"\nResults:")
 print(f"  Visualizations:  latent_plots/")
-print(f"  Metrics:         results/perturbation_prediction_accuracy.csv")
+print(f"  Top-k Metrics:   results/topk_metrics.csv")
+print(f"  Perturbation:    results/perturbation_prediction_accuracy.csv")
 

@@ -10,7 +10,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import normalize
 from pathlib import Path
 import sys
-sys.path.append('.')
+from pathlib import Path
+
+# Add parent to path
+parent_dir = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(parent_dir))
 
 from src.autoencoder.vae import preprocess_gene_expression
 from src.autoencoder.contrastive_vae import ContrastiveVAE, ContrastiveGeneExpressionDataset
@@ -25,9 +29,13 @@ print("="*70)
 print(f"Evaluating on {SAMPLE_SIZE} random samples\n")
 
 # Load data
+# Get paths
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
+
 print("Loading data...")
-counts_df = pd.read_csv('Dataset/csv/HEK293T_Counts.csv', header=1, index_col=0)
-metadata = pd.read_excel('Dataset/HEK293T_MetaData.xlsx', header=1)
+counts_df = pd.read_csv(PROJECT_ROOT / 'Dataset' / 'csv' / 'HEK293T_Counts.csv', header=1, index_col=0)
+metadata = pd.read_excel(PROJECT_ROOT / 'Dataset' / 'HEK293T_MetaData.xlsx', header=1)
 
 processed_df, _ = preprocess_gene_expression(
     counts_df, method='log_normalize', scale='standard',
@@ -45,7 +53,22 @@ print(f"Sampled {SAMPLE_SIZE} samples for evaluation\n")
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Find models
-model_files = list(Path('models').glob('*.pt'))
+model_files = list((PROJECT_ROOT / 'models').glob('*.pt'))
+
+# Check for existing results
+results_file = PROJECT_ROOT / 'results' / 'topk_metrics.csv'
+if results_file.exists():
+    existing_results = pd.read_csv(results_file)
+    evaluated_models = set(existing_results['model'].values)
+    model_files = [f for f in model_files if f.name not in evaluated_models]
+    print(f"Skipping {len(evaluated_models)} already evaluated model(s)")
+else:
+    existing_results = pd.DataFrame()
+
+if len(model_files) == 0:
+    print("All models already evaluated for top-k!")
+    print(f"Results in: {results_file}")
+    exit()
 all_results = []
 
 for model_file in model_files:
@@ -136,6 +159,10 @@ print("="*70)
 comparison_df = pd.DataFrame(all_results)
 print(comparison_df.to_string(index=False))
 
-comparison_df.to_csv('results/topk_metrics.csv', index=False)
-print(f"\nSaved to: results/topk_metrics.csv")
+# Combine with existing if any
+if not existing_results.empty:
+    comparison_df = pd.concat([existing_results, comparison_df], ignore_index=True)
+
+comparison_df.to_csv(PROJECT_ROOT / 'results' / 'topk_metrics.csv', index=False)
+print(f"\nSaved to: {PROJECT_ROOT / 'results' / 'topk_metrics.csv'}")
 
