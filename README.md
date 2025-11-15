@@ -1,4 +1,4 @@
-# Gene Expression Perturbation Prediction
+# Bulk RNA-seq Perturbation prediction
 
 Deep learning models for predicting gene expression changes after compound perturbations.
 
