@@ -8,7 +8,10 @@ import torch
 from torch.utils.data import DataLoader
 import sys
 from pathlib import Path
-sys.path.append('..')  # Parent directory for imports
+
+# Add parent directory to path
+parent_dir = Path(__file__).parent.parent.absolute()
+sys.path.insert(0, str(parent_dir))
 
 from src.autoencoder.vae import preprocess_gene_expression
 from src.autoencoder.contrastive_vae import (

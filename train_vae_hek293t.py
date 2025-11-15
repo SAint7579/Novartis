@@ -8,7 +8,10 @@ import torch
 from torch.utils.data import DataLoader
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent))  # Project root
+
+# Add project root to path
+project_root = Path(__file__).parent.absolute()
+sys.path.insert(0, str(project_root))
 
 from src.autoencoder.vae import (
     VAE, 

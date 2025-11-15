@@ -16,9 +16,12 @@ import torch
 from torch.utils.data import DataLoader
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent))  # Project root
 
-from src.autoencoder.vae import preprocess_gene_expression
+# Add project root to path
+project_root = Path(__file__).parent.absolute()
+sys.path.insert(0, str(project_root))
+
+from src.autoencoder.vae.utils import preprocess_gene_expression
 from src.autoencoder.triplet_vae import (
     TripletVAE,
     train_triplet_vae,
