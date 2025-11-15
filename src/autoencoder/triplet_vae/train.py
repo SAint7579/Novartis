@@ -106,17 +106,19 @@ def train_triplet_vae(
             negative_dmso = negative_dmso.to(device)
             negative_compound = negative_compound.to(device)
             
-            # Forward pass for all four
+            # Forward pass for all four - RECONSTRUCT ALL
             recon_anchor, mu_anchor, logvar_anchor = model(anchor)
-            _, mu_positive, _ = model(positive)
-            _, mu_negative_dmso, _ = model(negative_dmso)
-            _, mu_negative_compound, _ = model(negative_compound)
+            recon_positive, mu_positive, logvar_positive = model(positive)
+            recon_dmso, mu_dmso, logvar_dmso = model(negative_dmso)
+            recon_compound, mu_compound, logvar_compound = model(negative_compound)
             
-            # Compute loss with both negatives and logFC weighting
+            # Compute loss - now reconstructs ALL samples including DMSO
             loss, recon_loss, kl_loss, triplet_loss, avg_weight = triplet_vae_loss(
-                recon_anchor, anchor, mu_anchor, logvar_anchor,
-                mu_anchor, mu_positive, mu_negative_dmso, mu_negative_compound,
-                anchor, positive, negative_compound, dmso_mean,
+                recon_anchor, recon_positive, recon_dmso, recon_compound,
+                anchor, positive, negative_dmso, negative_compound,
+                mu_anchor, logvar_anchor, mu_positive, logvar_positive,
+                mu_dmso, logvar_dmso, mu_compound, logvar_compound,
+                dmso_mean,
                 beta=beta, gamma=gamma, margin=margin, logfc_beta=logfc_beta
             )
             
@@ -165,14 +167,16 @@ def train_triplet_vae(
                     negative_compound = negative_compound.to(device)
                     
                     recon_anchor, mu_anchor, logvar_anchor = model(anchor)
-                    _, mu_positive, _ = model(positive)
-                    _, mu_negative_dmso, _ = model(negative_dmso)
-                    _, mu_negative_compound, _ = model(negative_compound)
+                    recon_positive, mu_positive, logvar_positive = model(positive)
+                    recon_dmso, mu_dmso, logvar_dmso = model(negative_dmso)
+                    recon_compound, mu_compound, logvar_compound = model(negative_compound)
                     
                     loss, recon_loss, kl_loss, triplet_loss, avg_weight = triplet_vae_loss(
-                        recon_anchor, anchor, mu_anchor, logvar_anchor,
-                        mu_anchor, mu_positive, mu_negative_dmso, mu_negative_compound,
-                        anchor, positive, negative_compound, val_dmso_mean,
+                        recon_anchor, recon_positive, recon_dmso, recon_compound,
+                        anchor, positive, negative_dmso, negative_compound,
+                        mu_anchor, logvar_anchor, mu_positive, logvar_positive,
+                        mu_dmso, logvar_dmso, mu_compound, logvar_compound,
+                        val_dmso_mean,
                         beta=beta, gamma=gamma, margin=margin, logfc_beta=logfc_beta
                     )
                     

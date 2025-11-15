@@ -223,17 +223,22 @@ def weighted_triplet_loss(anchor, positive, negative, weights, margin=1.0, use_c
 
 
 def triplet_vae_loss(
-    recon_x: torch.Tensor,
-    x: torch.Tensor,
-    mu: torch.Tensor,
-    logvar: torch.Tensor,
-    anchor_latent: torch.Tensor,
-    positive_latent: torch.Tensor,
-    negative_dmso_latent: torch.Tensor,
-    negative_compound_latent: torch.Tensor,
+    recon_anchor: torch.Tensor,
+    recon_positive: torch.Tensor,
+    recon_dmso: torch.Tensor,
+    recon_compound: torch.Tensor,
     anchor_expr: torch.Tensor,
     positive_expr: torch.Tensor,
-    negative_compound_expr: torch.Tensor,
+    dmso_expr: torch.Tensor,
+    compound_expr: torch.Tensor,
+    mu_anchor: torch.Tensor,
+    logvar_anchor: torch.Tensor,
+    mu_positive: torch.Tensor,
+    logvar_positive: torch.Tensor,
+    mu_dmso: torch.Tensor,
+    logvar_dmso: torch.Tensor,
+    mu_compound: torch.Tensor,
+    logvar_compound: torch.Tensor,
     dmso_mean: torch.Tensor,
     beta: float = 1.0,
     gamma: float = 1.0,
@@ -242,53 +247,24 @@ def triplet_vae_loss(
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Complete loss for Triplet VAE with dual negatives.
-    
-    Total = Reconstruction + β*KL + γ*WeightedMultiNegativeTriplet
-    
-    Pushes away from BOTH DMSO baseline AND other compounds.
-    
-    Parameters:
-    -----------
-    recon_x : torch.Tensor
-        Reconstructed input
-    x : torch.Tensor
-        Original input
-    mu : torch.Tensor
-        Latent mean
-    logvar : torch.Tensor
-        Latent log variance
-    anchor_latent : torch.Tensor
-        Anchor latent
-    positive_latent : torch.Tensor
-        Positive latent
-    negative_dmso_latent : torch.Tensor
-        DMSO negative latent
-    negative_compound_latent : torch.Tensor
-        Other compound negative latent
-    anchor_expr : torch.Tensor
-        Anchor expression (for logFC weighting)
-    positive_expr : torch.Tensor
-        Positive expression (for logFC weighting)
-    dmso_mean : torch.Tensor
-        Mean DMSO expression
-    beta : float
-        KL weight
-    gamma : float
-        Triplet weight
-    margin : float
-        Margin
-    logfc_beta : float
-        LogFC weighting temperature
-    
-    Returns:
-    --------
-    total_loss, recon_loss, kl_loss, triplet_loss, avg_weight
+    Reconstructs ALL samples (anchor, positive, DMSO, other compound).
     """
-    # Reconstruction loss
-    recon_loss = F.mse_loss(recon_x, x, reduction='sum') / x.size(0)
+    # Reconstruction loss for ALL samples
+    batch_size = anchor_expr.size(0)
+    recon_loss = (
+        F.mse_loss(recon_anchor, anchor_expr, reduction='sum') +
+        F.mse_loss(recon_positive, positive_expr, reduction='sum') +
+        F.mse_loss(recon_dmso, dmso_expr, reduction='sum') +
+        F.mse_loss(recon_compound, compound_expr, reduction='sum')
+    ) / (4 * batch_size)  # Average over all 4 samples
     
-    # KL divergence
-    kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) / x.size(0)
+    # KL divergence for ALL samples
+    kl_loss = (
+        -0.5 * torch.sum(1 + logvar_anchor - mu_anchor.pow(2) - logvar_anchor.exp()) +
+        -0.5 * torch.sum(1 + logvar_positive - mu_positive.pow(2) - logvar_positive.exp()) +
+        -0.5 * torch.sum(1 + logvar_dmso - mu_dmso.pow(2) - logvar_dmso.exp()) +
+        -0.5 * torch.sum(1 + logvar_compound - mu_compound.pow(2) - logvar_compound.exp())
+    ) / (4 * batch_size)
     
     # Compute logFC-based weights for each component
     # 1. Positive: small logFC diff → high weight (enforce similarity)
@@ -298,12 +274,12 @@ def triplet_vae_loss(
     dmso_weight = compute_logfc_weights_dmso_negative(anchor_expr, dmso_mean, beta=logfc_beta)
     
     # 3. Compound: large logFC diff → high weight (different biology, enforce separation)
-    compound_weight = compute_logfc_weights_compound_negative(anchor_expr, negative_compound_expr, dmso_mean, beta=logfc_beta)
+    compound_weight = compute_logfc_weights_compound_negative(anchor_expr, compound_expr, dmso_mean, beta=logfc_beta)
     
     # Multi-negative triplet loss with separate weights
     triplet_loss = weighted_multi_negative_triplet_loss(
-        anchor_latent, positive_latent, 
-        negative_dmso_latent, negative_compound_latent,
+        mu_anchor, mu_positive, 
+        mu_dmso, mu_compound,
         pos_weight, dmso_weight, compound_weight,
         margin=margin, use_cosine=True
     )

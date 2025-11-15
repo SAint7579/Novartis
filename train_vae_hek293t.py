@@ -7,7 +7,8 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 import sys
-sys.path.append('.')
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent))  # Project root
 
 from src.autoencoder.vae import (
     VAE, 
