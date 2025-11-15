@@ -18,23 +18,17 @@ import sys
 import os
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent.absolute()
-sys.path.insert(0, str(project_root))
-os.chdir(str(project_root))  # Change to project root
+# Ensure we're in project root and add to Python path
+project_root = Path(__file__).resolve().parent
+os.chdir(str(project_root))
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-# Import with fallback
-try:
-    from src.autoencoder.vae.utils import preprocess_gene_expression
-    from src.autoencoder.triplet_vae import TripletVAE, train_triplet_vae, TripletGeneExpressionDataset
-    from src.autoencoder.contrastive_vae import plot_latent_space_by_treatment, ContrastiveGeneExpressionDataset
-    from src.autoencoder.contrastive_vae.utils import plot_training_history
-except ImportError:
-    # Fallback: try direct imports
-    from src.autoencoder.vae import preprocess_gene_expression
-    from src.autoencoder.triplet_vae import TripletVAE, train_triplet_vae, TripletGeneExpressionDataset
-    from src.autoencoder.contrastive_vae import plot_latent_space_by_treatment, ContrastiveGeneExpressionDataset
-    from src.autoencoder.contrastive_vae.utils import plot_training_history
+# Direct imports
+from src.autoencoder.vae import preprocess_gene_expression
+from src.autoencoder.triplet_vae import TripletVAE, train_triplet_vae, TripletGeneExpressionDataset
+from src.autoencoder.contrastive_vae import plot_latent_space_by_treatment, ContrastiveGeneExpressionDataset
+from src.autoencoder.contrastive_vae.utils import plot_training_history
 
 print("="*70)
 print("Triplet VAE with LogFC-Weighted Loss")

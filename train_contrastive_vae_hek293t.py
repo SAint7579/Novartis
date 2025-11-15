@@ -10,16 +10,13 @@ import sys
 import os
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent.absolute()
-sys.path.insert(0, str(project_root))
-os.chdir(str(project_root))  # Change to project root
+# Ensure we're in project root and add to Python path
+project_root = Path(__file__).resolve().parent
+os.chdir(str(project_root))
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-try:
-    from src.autoencoder.vae.utils import preprocess_gene_expression
-except ImportError:
-    from src.autoencoder.vae import preprocess_gene_expression
-
+from src.autoencoder.vae import preprocess_gene_expression
 from src.autoencoder.contrastive_vae import (
     ContrastiveVAE,
     train_contrastive_vae,
