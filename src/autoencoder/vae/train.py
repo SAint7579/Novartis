@@ -60,7 +60,7 @@ def train_vae(
     
     # Learning rate scheduler
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=5, verbose=verbose
+        optimizer, mode='min', factor=0.5, patience=5
     )
     
     # Training history

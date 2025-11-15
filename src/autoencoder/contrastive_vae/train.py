@@ -67,7 +67,7 @@ def train_contrastive_vae(
     
     # Learning rate scheduler
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=5, verbose=False
+        optimizer, mode='min', factor=0.5, patience=5
     )
     
     # Training history
