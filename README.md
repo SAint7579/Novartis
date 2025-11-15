@@ -162,15 +162,16 @@ python evaluation/plot_volcano.py \
 ### Top-k Replicate Retrieval
 | Model | Top-1 Acc | Top-3 Acc | Top-5 Acc |
 |-------|-----------|-----------|-----------|
-| Contrastive VAE | 0.25 | 0.30 | 0.32 |
-| Triplet VAE | 0.12 | 0.13 | 0.13 |
-| Standard VAE | 0.08 | 0.10 | 0.11 |
+| Ours | 0.25 | 0.30 | 0.32 |
+| Contrastive VAE | 0.12 | 0.13 | 0.13 |
+| VAE | 0.08 | 0.10 | 0.11 |
 
 ### Perturbation Prediction (LogFC Correlation)
 | Model | Correlation | Uses SMILES? | Method |
 |-------|-------------|--------------|--------|
+| Ours | 0.212 | ❌ | Trains MLP per treatment |
 | Contrastive VAE | 0.155 | ❌ | Trains MLP per treatment |
-| Triplet VAE2 | 0.156 | ❌ | Trains MLP per treatment |
+| VAE | 0.112 | ❌ | Trains MLP per treatment |
 | Diffusion | TBD | ✅ | Zero-shot from SMILES |
 | Linear | TBD | ✅ | Zero-shot from SMILES |
 
