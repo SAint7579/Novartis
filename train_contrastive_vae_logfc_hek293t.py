@@ -71,23 +71,24 @@ processed_df, _ = preprocess_gene_expression(
     variance_threshold=0.01
 )
 
-# Transpose to [samples x genes]
-processed_df_T = processed_df.T.reset_index(drop=True)
+# processed_df is already [samples x genes] = [40778 x 3311]
+# Align metadata with processed_df using the index (sample IDs)
+metadata = metadata.set_index('unique_ID').loc[processed_df.index].reset_index()
 
-INPUT_DIM = processed_df_T.shape[1]
+INPUT_DIM = processed_df.shape[1]
 print(f"Input dimension: {INPUT_DIM} genes")
-print(f"Number of samples: {processed_df_T.shape[0]}")
+print(f"Number of samples: {processed_df.shape[0]}")
 
 # Compute DMSO mean for logFC weighting
 dmso_mask = metadata['treatment'] == 'DMSO'
-dmso_data = processed_df_T[dmso_mask]
+dmso_data = processed_df[dmso_mask.values]  # Use .values to align indices
 dmso_mean = torch.tensor(dmso_data.mean(axis=0).values, dtype=torch.float32).to(DEVICE)
 print(f"DMSO samples: {dmso_mask.sum()}")
 
 # Create datasets
 print("\nCreating datasets...")
 train_dataset, val_dataset = ContrastiveGeneExpressionDataset.create_train_val_split(
-    processed_df_T,
+    processed_df,
     treatments=metadata['treatment'],
     val_split=0.2,
     stratify=True,
