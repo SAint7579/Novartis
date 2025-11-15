@@ -101,7 +101,9 @@ for model_file in model_files:
     print(f"{'='*70}")
     
     # Determine model type from filename
-    if 'infonce' in model_file.name.lower():
+    if 'logfc' in model_file.name.lower() and 'contrastive' in model_file.name.lower():
+        model_type = 'contrastive_logfc'
+    elif 'infonce' in model_file.name.lower():
         model_type = 'infonce'
     elif 'contrastive' in model_file.name.lower():
         model_type = 'contrastive'
@@ -133,7 +135,7 @@ for model_file in model_files:
             eval_data = processed_df.T.reset_index(drop=True)
         
         # Initialize model
-        if model_type == 'contrastive':
+        if model_type == 'contrastive' or model_type == 'contrastive_logfc':
             model = ContrastiveVAE(
                 input_dim=input_dim,
                 latent_dim=64,

@@ -242,7 +242,9 @@ for model_file in model_files:
     print(f"{'='*70}")
     
     # Determine model type
-    if 'infonce' in model_file.name.lower():
+    if 'logfc' in model_file.name.lower() and 'contrastive' in model_file.name.lower():
+        model_type = 'contrastive'  # Same architecture as contrastive
+    elif 'infonce' in model_file.name.lower():
         model_type = 'infonce'
     elif 'contrastive' in model_file.name.lower():
         model_type = 'contrastive'
