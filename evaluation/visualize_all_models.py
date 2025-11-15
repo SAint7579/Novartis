@@ -30,10 +30,14 @@ print()
 # Configuration
 # ============================================================================
 
-MODELS_DIR = Path('../models')
-OUTPUT_DIR = Path('../latent_plots')
-COUNTS_CSV = '../Dataset/csv/HEK293T_Counts.csv'
-METADATA_XLSX = '../Dataset/HEK293T_MetaData.xlsx'
+# Get paths relative to script location
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
+
+MODELS_DIR = PROJECT_ROOT / 'models'
+OUTPUT_DIR = PROJECT_ROOT / 'latent_plots'
+COUNTS_CSV = PROJECT_ROOT / 'Dataset' / 'csv' / 'HEK293T_Counts.csv'
+METADATA_XLSX = PROJECT_ROOT / 'Dataset' / 'HEK293T_MetaData.xlsx'
 
 # Create output directory
 OUTPUT_DIR.mkdir(exist_ok=True)

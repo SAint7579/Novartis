@@ -180,10 +180,14 @@ print("="*70)
 print("Task: Predict post-perturbation from baseline, measure logFC recovery")
 print()
 
+# Get paths relative to script location
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
+
 # Load data
 print("Loading data...")
-counts_df = pd.read_csv('../Dataset/csv/HEK293T_Counts.csv', header=1, index_col=0)
-metadata = pd.read_excel('../Dataset/HEK293T_MetaData.xlsx', header=1)
+counts_df = pd.read_csv(PROJECT_ROOT / 'Dataset' / 'csv' / 'HEK293T_Counts.csv', header=1, index_col=0)
+metadata = pd.read_excel(PROJECT_ROOT / 'Dataset' / 'HEK293T_MetaData.xlsx', header=1)
 
 processed_df, _ = preprocess_gene_expression(
     counts_df, method='log_normalize', scale='standard',
@@ -191,11 +195,11 @@ processed_df, _ = preprocess_gene_expression(
 )
 
 # Find models
-models_dir = Path('../models')
+models_dir = PROJECT_ROOT / 'models'
 model_files = list(models_dir.glob('*.pt'))
 
 # Load existing results if they exist
-results_file = Path('../results/perturbation_prediction_accuracy.csv')
+results_file = PROJECT_ROOT / 'results' / 'perturbation_prediction_accuracy.csv'
 if results_file.exists():
     existing_results = pd.read_csv(results_file)
     evaluated_models = set(existing_results['model'].values)
@@ -261,7 +265,7 @@ if len(results) > 0:
         results_df = new_results_df
     
     # Save updated results
-    results_df.to_csv('../results/perturbation_prediction_accuracy.csv', index=False)
+    results_df.to_csv(PROJECT_ROOT / 'results' / 'perturbation_prediction_accuracy.csv', index=False)
     print(f"Updated results saved")
 else:
     results_df = existing_results
@@ -278,5 +282,5 @@ print(f"  Correlation >0.7: Good - latent space captures perturbation effects")
 print(f"  Correlation 0.5-0.7: Moderate")  
 print(f"  Correlation <0.5: Poor - latent space doesn't capture biology well")
 
-print(f"\nResults in: ../results/perturbation_prediction_accuracy.csv")
+print(f"\nResults in: {PROJECT_ROOT / 'results' / 'perturbation_prediction_accuracy.csv'}")
 
