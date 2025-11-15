@@ -62,6 +62,12 @@ def evaluate_model_perturbation_prediction(model_path, model_type, processed_df,
             input_dim=processed_df.shape[1], latent_dim=64,
             hidden_dims=[512, 256, 128], dropout=0.2
         )
+    elif model_type == 'infonce':
+        # InfoNCE uses standard VAE architecture
+        model = VAE(
+            input_dim=processed_df.shape[1], latent_dim=64,
+            hidden_dims=[512, 256, 128], dropout=0.2
+        )
     else:
         model = VAE(
             input_dim=processed_df.shape[1], latent_dim=64,
@@ -232,7 +238,9 @@ for model_file in model_files:
     print(f"Evaluating: {model_file.name}")
     print(f"{'='*70}")
     
-    if 'contrastive' in model_file.name.lower():
+    if 'infonce' in model_file.name.lower():
+        model_type = 'infonce'
+    elif 'contrastive' in model_file.name.lower():
         model_type = 'contrastive'
     elif 'triplet' in model_file.name.lower():
         model_type = 'triplet'

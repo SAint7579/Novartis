@@ -101,7 +101,9 @@ for model_file in model_files:
     print(f"{'='*70}")
     
     # Determine model type from filename
-    if 'contrastive' in model_file.name.lower():
+    if 'infonce' in model_file.name.lower():
+        model_type = 'infonce'
+    elif 'contrastive' in model_file.name.lower():
         model_type = 'contrastive'
     elif 'triplet' in model_file.name.lower():
         model_type = 'triplet'
@@ -124,6 +126,15 @@ for model_file in model_files:
         elif model_type == 'triplet':
             from src.autoencoder.triplet_vae import TripletVAE
             model = TripletVAE(
+                input_dim=processed_df.shape[1],
+                latent_dim=64,
+                hidden_dims=[512, 256, 128],
+                dropout=0.2
+            )
+            dataset = ContrastiveGeneExpressionDataset(processed_df, metadata['treatment'])
+        elif model_type == 'infonce':
+            # InfoNCE uses standard VAE architecture
+            model = VAE(
                 input_dim=processed_df.shape[1],
                 latent_dim=64,
                 hidden_dims=[512, 256, 128],
