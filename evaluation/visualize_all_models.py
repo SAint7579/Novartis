@@ -113,10 +113,21 @@ for model_file in model_files:
     print(f"Model type: {model_type} VAE")
     
     try:
+        # Load checkpoint first to get config
+        checkpoint = torch.load(model_file, map_location='cpu', weights_only=False)
+        
+        # Get input_dim from checkpoint config if available, otherwise use default
+        if 'config' in checkpoint and 'input_dim' in checkpoint['config']:
+            input_dim = checkpoint['config']['input_dim']
+        else:
+            input_dim = processed_df.shape[1]
+        
+        print(f"  Using input_dim: {input_dim}")
+        
         # Initialize model
         if model_type == 'contrastive':
             model = ContrastiveVAE(
-                input_dim=processed_df.shape[1],
+                input_dim=input_dim,
                 latent_dim=64,
                 hidden_dims=[512, 256, 128],
                 dropout=0.2,
@@ -126,7 +137,7 @@ for model_file in model_files:
         elif model_type == 'triplet':
             from src.autoencoder.triplet_vae import TripletVAE
             model = TripletVAE(
-                input_dim=processed_df.shape[1],
+                input_dim=input_dim,
                 latent_dim=64,
                 hidden_dims=[512, 256, 128],
                 dropout=0.2
@@ -135,7 +146,7 @@ for model_file in model_files:
         elif model_type == 'infonce':
             # InfoNCE uses standard VAE architecture
             model = VAE(
-                input_dim=processed_df.shape[1],
+                input_dim=input_dim,
                 latent_dim=64,
                 hidden_dims=[512, 256, 128],
                 dropout=0.2
@@ -143,15 +154,14 @@ for model_file in model_files:
             dataset = ContrastiveGeneExpressionDataset(processed_df, metadata['treatment'])
         else:
             model = VAE(
-                input_dim=processed_df.shape[1],
+                input_dim=input_dim,
                 latent_dim=64,
                 hidden_dims=[512, 256, 128],
                 dropout=0.2
             )
             dataset = GeneExpressionDataset(processed_df, metadata['treatment'])
         
-        # Load weights (weights_only=False for compatibility with older PyTorch)
-        checkpoint = torch.load(model_file, map_location='cpu', weights_only=False)
+        # Load weights
         model.load_state_dict(checkpoint['model_state_dict'])
         model.eval()
         

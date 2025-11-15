@@ -50,31 +50,41 @@ def evaluate_model_perturbation_prediction(model_path, model_type, processed_df,
     Evaluate perturbation prediction for one model.
     """
     
+    # Load checkpoint first to get config
+    checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
+    
+    # Get input_dim from checkpoint config if available
+    if 'config' in checkpoint and 'input_dim' in checkpoint['config']:
+        input_dim = checkpoint['config']['input_dim']
+    else:
+        input_dim = processed_df.shape[1]
+    
+    print(f"  Using input_dim: {input_dim}")
+    
     # Load model
     if model_type == 'contrastive':
         model = ContrastiveVAE(
-            input_dim=processed_df.shape[1], latent_dim=64,
+            input_dim=input_dim, latent_dim=64,
             hidden_dims=[512, 256, 128], dropout=0.2, projection_dim=128
         )
     elif model_type == 'triplet':
         from src.autoencoder.triplet_vae import TripletVAE
         model = TripletVAE(
-            input_dim=processed_df.shape[1], latent_dim=64,
+            input_dim=input_dim, latent_dim=64,
             hidden_dims=[512, 256, 128], dropout=0.2
         )
     elif model_type == 'infonce':
         # InfoNCE uses standard VAE architecture
         model = VAE(
-            input_dim=processed_df.shape[1], latent_dim=64,
+            input_dim=input_dim, latent_dim=64,
             hidden_dims=[512, 256, 128], dropout=0.2
         )
     else:
         model = VAE(
-            input_dim=processed_df.shape[1], latent_dim=64,
+            input_dim=input_dim, latent_dim=64,
             hidden_dims=[512, 256, 128], dropout=0.2
         )
     
-    checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     model = model.to(device)

@@ -221,7 +221,7 @@ for epoch in range(NUM_EPOCHS):
             'loss': avg_loss,
             'history': history,
             'config': {
-                'input_dim': INPUT_DIM,
+                'input_dim': INPUT_DIM,  # 40778 genes
                 'latent_dim': LATENT_DIM,
                 'hidden_dims': HIDDEN_DIMS,
                 'beta': BETA,
