@@ -74,7 +74,7 @@ INPUT_DIM = processed_df.shape[0]
 print(f"Input dimension: {INPUT_DIM}")
 
 # Compute DMSO mean for logFC weighting
-dmso_indices = metadata[metadata['Treatment'] == 'DMSO'].index
+dmso_indices = metadata[metadata['treatment'] == 'DMSO'].index
 dmso_samples = processed_df[dmso_indices]
 dmso_mean = torch.tensor(dmso_samples.mean(axis=1).values, dtype=torch.float32).to(DEVICE)
 
@@ -82,7 +82,7 @@ dmso_mean = torch.tensor(dmso_samples.mean(axis=1).values, dtype=torch.float32).
 dataset = ContrastiveGeneExpressionDataset(
     processed_df,
     metadata,
-    label_column='Treatment'
+    label_column='treatment'
 )
 
 dataloader = DataLoader(
