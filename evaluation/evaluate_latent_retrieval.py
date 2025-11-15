@@ -145,7 +145,7 @@ def evaluate_model(model_path, model_type, processed_df, metadata, device='cpu')
             dropout=0.2
         )
     
-    checkpoint = torch.load(model_path, map_location='cpu')
+    checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     
     # Create dataset and loader

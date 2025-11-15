@@ -69,7 +69,7 @@ else:
     )
     dataset = GeneExpressionDataset(processed_df, metadata['treatment'])
 
-checkpoint = torch.load(args.model, map_location='cpu')
+checkpoint = torch.load(args.model, map_location='cpu', weights_only=False)
 model.load_state_dict(checkpoint['model_state_dict'])
 model.eval()
 

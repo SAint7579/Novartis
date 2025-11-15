@@ -88,7 +88,7 @@ model = ContrastiveVAE(
 )
 
 # Load weights
-checkpoint = torch.load(MODEL_PATH, map_location='cpu')
+checkpoint = torch.load(MODEL_PATH, map_location='cpu', weights_only=False)
 model.load_state_dict(checkpoint['model_state_dict'])
 model.eval()
 

@@ -67,7 +67,7 @@ for model_file in model_files:
             hidden_dims=[512, 256, 128], dropout=0.2
         )
     
-    checkpoint = torch.load(model_file, map_location='cpu')
+    checkpoint = torch.load(model_file, map_location='cpu', weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     model = model.to(device)

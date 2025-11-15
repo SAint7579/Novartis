@@ -68,7 +68,7 @@ def evaluate_model_perturbation_prediction(model_path, model_type, processed_df,
             hidden_dims=[512, 256, 128], dropout=0.2
         )
     
-    checkpoint = torch.load(model_path, map_location='cpu')
+    checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     model = model.to(device)
