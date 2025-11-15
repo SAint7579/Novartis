@@ -96,6 +96,14 @@ for model_file in model_files:
     
     print(f"Using input_dim: {input_dim}")
     
+    # For InfoNCE models trained with transposed data, transpose evaluation data
+    eval_data = processed_sample
+    eval_metadata = metadata_sample
+    if model_type == 'infonce' and input_dim != processed_sample.shape[1]:
+        print(f"  Transposing data for InfoNCE model: {processed_sample.shape} -> {processed_sample.shape[::-1]}")
+        eval_data = processed_sample.T.reset_index(drop=True)
+        # Metadata order doesn't change, just reassign
+    
     # Load model
     if model_type == 'contrastive':
         model = ContrastiveVAE(
@@ -125,7 +133,7 @@ for model_file in model_files:
     model = model.to(device)
     
     # Extract latent
-    dataset = ContrastiveGeneExpressionDataset(processed_sample, metadata_sample['treatment'])
+    dataset = ContrastiveGeneExpressionDataset(eval_data, eval_metadata['treatment'])
     loader = DataLoader(dataset, batch_size=128, shuffle=False)
     
     latent_list = []

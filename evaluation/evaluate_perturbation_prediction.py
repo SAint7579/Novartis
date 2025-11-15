@@ -61,6 +61,12 @@ def evaluate_model_perturbation_prediction(model_path, model_type, processed_df,
     
     print(f"  Using input_dim: {input_dim}")
     
+    # For InfoNCE models trained with transposed data, transpose evaluation data
+    eval_data = processed_df
+    if model_type == 'infonce' and input_dim != processed_df.shape[1]:
+        print(f"  Transposing data for InfoNCE model: {processed_df.shape} -> {processed_df.shape[::-1]}")
+        eval_data = processed_df.T.reset_index(drop=True)
+    
     # Load model
     if model_type == 'contrastive':
         model = ContrastiveVAE(
@@ -91,7 +97,7 @@ def evaluate_model_perturbation_prediction(model_path, model_type, processed_df,
     
     # Extract latent representations for all samples
     print("  Extracting latent representations...")
-    dataset = ContrastiveGeneExpressionDataset(processed_df, metadata['treatment'])
+    dataset = ContrastiveGeneExpressionDataset(eval_data, metadata['treatment'])
     loader = DataLoader(dataset, batch_size=256, shuffle=False)
     
     all_latent = []
@@ -105,7 +111,7 @@ def evaluate_model_perturbation_prediction(model_path, model_type, processed_df,
     # Get DMSO baseline
     dmso_mask = metadata['treatment'].str.upper() == 'DMSO'
     dmso_latent = latent_embeddings[dmso_mask]
-    dmso_expr = processed_df.values[dmso_mask]
+    dmso_expr = eval_data.values[dmso_mask]
     dmso_mean_latent = dmso_latent.mean(axis=0)
     dmso_mean_expr = dmso_expr.mean(axis=0)
     
@@ -125,7 +131,7 @@ def evaluate_model_perturbation_prediction(model_path, model_type, processed_df,
     for treatment in eval_treatments:
         treatment_mask = metadata['treatment'] == treatment
         treatment_latent = latent_embeddings[treatment_mask]
-        treatment_expr = processed_df.values[treatment_mask]
+        treatment_expr = eval_data.values[treatment_mask]
         
         if len(treatment_latent) < 2:
             continue

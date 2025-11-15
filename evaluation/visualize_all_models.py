@@ -124,6 +124,12 @@ for model_file in model_files:
         
         print(f"  Using input_dim: {input_dim}")
         
+        # For InfoNCE models trained with transposed data, transpose evaluation data
+        eval_data = processed_df
+        if model_type == 'infonce' and input_dim != processed_df.shape[1]:
+            print(f"  Transposing data for InfoNCE model: {processed_df.shape} -> {processed_df.shape[::-1]}")
+            eval_data = processed_df.T.reset_index(drop=True)
+        
         # Initialize model
         if model_type == 'contrastive':
             model = ContrastiveVAE(
@@ -133,7 +139,7 @@ for model_file in model_files:
                 dropout=0.2,
                 projection_dim=128
             )
-            dataset = ContrastiveGeneExpressionDataset(processed_df, metadata['treatment'])
+            dataset = ContrastiveGeneExpressionDataset(eval_data, metadata['treatment'])
         elif model_type == 'triplet':
             from src.autoencoder.triplet_vae import TripletVAE
             model = TripletVAE(
@@ -142,7 +148,7 @@ for model_file in model_files:
                 hidden_dims=[512, 256, 128],
                 dropout=0.2
             )
-            dataset = ContrastiveGeneExpressionDataset(processed_df, metadata['treatment'])
+            dataset = ContrastiveGeneExpressionDataset(eval_data, metadata['treatment'])
         elif model_type == 'infonce':
             # InfoNCE uses standard VAE architecture
             model = VAE(
@@ -151,7 +157,7 @@ for model_file in model_files:
                 hidden_dims=[512, 256, 128],
                 dropout=0.2
             )
-            dataset = ContrastiveGeneExpressionDataset(processed_df, metadata['treatment'])
+            dataset = ContrastiveGeneExpressionDataset(eval_data, metadata['treatment'])
         else:
             model = VAE(
                 input_dim=input_dim,
@@ -159,7 +165,7 @@ for model_file in model_files:
                 hidden_dims=[512, 256, 128],
                 dropout=0.2
             )
-            dataset = GeneExpressionDataset(processed_df, metadata['treatment'])
+            dataset = GeneExpressionDataset(eval_data, metadata['treatment'])
         
         # Load weights
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -175,7 +181,7 @@ for model_file in model_files:
         # Plot (use contrastive dataset for both - it works with both model types)
         if model_type == 'standard':
             # Re-create with contrastive dataset for visualization compatibility
-            dataset = ContrastiveGeneExpressionDataset(processed_df, metadata['treatment'])
+            dataset = ContrastiveGeneExpressionDataset(eval_data, metadata['treatment'])
             data_loader = DataLoader(dataset, batch_size=128, shuffle=False)
         
         # PCA plot

@@ -139,6 +139,12 @@ def evaluate_model(model_path, model_type, processed_df, metadata, device='cpu')
     
     print(f"  Using input_dim: {input_dim}")
     
+    # For InfoNCE models trained with transposed data, transpose evaluation data
+    eval_data = processed_df
+    if model_type == 'infonce' and input_dim != processed_df.shape[1]:
+        print(f"  Transposing data for InfoNCE model: {processed_df.shape} -> {processed_df.shape[::-1]}")
+        eval_data = processed_df.T.reset_index(drop=True)
+    
     # Load model
     if model_type == 'contrastive':
         model = ContrastiveVAE(
@@ -175,7 +181,7 @@ def evaluate_model(model_path, model_type, processed_df, metadata, device='cpu')
     model.load_state_dict(checkpoint['model_state_dict'])
     
     # Create dataset and loader
-    dataset = ContrastiveGeneExpressionDataset(processed_df, metadata['treatment'])
+    dataset = ContrastiveGeneExpressionDataset(eval_data, metadata['treatment'])
     data_loader = DataLoader(dataset, batch_size=128, shuffle=False)
     
     # Extract latent features
