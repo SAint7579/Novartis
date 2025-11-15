@@ -70,19 +70,25 @@ processed_df, scaler = preprocess_gene_expression(
     variance_threshold=0.01
 )
 
-INPUT_DIM = processed_df.shape[0]
+# processed_df is [genes x samples], need to transpose to [samples x genes]
+processed_df_T = processed_df.T
+# Reset index to match metadata row indices
+processed_df_T = processed_df_T.reset_index(drop=True)
+
+INPUT_DIM = processed_df_T.shape[1]
 print(f"Input dimension: {INPUT_DIM}")
+print(f"Number of samples: {processed_df_T.shape[0]}")
 
 # Compute DMSO mean for logFC weighting
-dmso_indices = metadata[metadata['treatment'] == 'DMSO'].index
-dmso_samples = processed_df[dmso_indices]
-dmso_mean = torch.tensor(dmso_samples.mean(axis=1).values, dtype=torch.float32).to(DEVICE)
+dmso_mask = metadata['treatment'] == 'DMSO'
+dmso_data = processed_df_T[dmso_mask]  # Now indices align
+dmso_mean = torch.tensor(dmso_data.mean(axis=0).values, dtype=torch.float32).to(DEVICE)
+print(f"DMSO samples: {dmso_mask.sum()}")
 
 # Create dataset (reuse ContrastiveGeneExpressionDataset)
 dataset = ContrastiveGeneExpressionDataset(
-    processed_df,
-    metadata,
-    label_column='treatment'
+    processed_df_T,
+    metadata['treatment']
 )
 
 dataloader = DataLoader(
@@ -144,7 +150,7 @@ for epoch in range(NUM_EPOCHS):
         'weight': 0.0
     }
     
-    for batch_idx, (expr, labels) in enumerate(dataloader):
+    for batch_idx, (expr, labels, _) in enumerate(dataloader):
         expr = expr.to(DEVICE)
         labels = labels.to(DEVICE)
         
