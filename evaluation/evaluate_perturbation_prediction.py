@@ -63,8 +63,10 @@ def evaluate_model_perturbation_prediction(model_path, model_type, processed_df,
     
     # For InfoNCE models trained with transposed data, transpose evaluation data
     eval_data = processed_df
-    if model_type == 'infonce' and input_dim != processed_df.shape[1]:
-        print(f"  Transposing data for InfoNCE model: {processed_df.shape} -> {processed_df.shape[::-1]}")
+    # Check if model expects genes as features (input_dim = #genes)
+    # and data is currently [genes x samples] format
+    if model_type == 'infonce' and input_dim == processed_df.shape[0]:
+        print(f"  Transposing data for InfoNCE model: {processed_df.shape} -> ({processed_df.shape[1]}, {processed_df.shape[0]})")
         eval_data = processed_df.T.reset_index(drop=True)
     
     # Load model

@@ -124,8 +124,26 @@ def logfc_weighted_info_nce_loss(
     pos_mask = torch.eq(labels, labels.t()).float().to(z.device)
     pos_mask = pos_mask - torch.eye(batch_size, device=z.device)  # Remove diagonal
     
-    # Compute logFC-based weights for all pairs
-    # Shape: [batch_size, batch_size]
+    # Compute standard InfoNCE loss first
+    exp_sim = torch.exp(similarity_matrix)
+    
+    # Positive similarities (numerator)
+    pos_sim = (exp_sim * pos_mask).sum(dim=1)
+    
+    # All similarities except self (denominator)
+    all_sim = exp_sim.sum(dim=1) - torch.diag(exp_sim)
+    
+    # Samples with at least one positive
+    has_positives = pos_mask.sum(dim=1) > 0
+    
+    if has_positives.sum() == 0:
+        return torch.tensor(0.0, device=z.device), torch.tensor(0.0, device=z.device)
+    
+    # Standard InfoNCE loss per sample
+    sample_losses = -torch.log(pos_sim[has_positives] / (all_sim[has_positives] + 1e-8))
+    
+    # Compute logFC-based weights for positives only
+    # For each sample, compute average logFC similarity to its positives
     expr_expanded = expr.unsqueeze(0).expand(batch_size, -1, -1)  # [batch_size, batch_size, n_genes]
     logfc_weights = compute_logfc_similarity_weights(
         expr, 
@@ -134,38 +152,18 @@ def logfc_weighted_info_nce_loss(
         beta=logfc_beta
     )
     
-    # For positives: use logFC weight as-is (high weight = similar logFC)
-    # For negatives: invert weight (high weight = different logFC, should be pushed apart more)
-    neg_mask = 1.0 - pos_mask - torch.eye(batch_size, device=z.device)
+    # Average logFC weight for each sample's positives
+    pos_logfc_weights = logfc_weights * pos_mask
+    num_positives = pos_mask.sum(dim=1).clamp(min=1e-8)
+    avg_pos_weight = pos_logfc_weights.sum(dim=1) / num_positives
     
-    # Weight positive similarities
-    pos_weights = logfc_weights * pos_mask
-    
-    # Weight negative similarities (inverted)
-    neg_weights = (1.0 - logfc_weights) * neg_mask
-    
-    # Compute weighted InfoNCE
-    exp_sim = torch.exp(similarity_matrix)
-    
-    # Weighted positive similarities (numerator)
-    weighted_pos_sim = (exp_sim * pos_weights).sum(dim=1)
-    
-    # Weighted negative similarities + unweighted positives (denominator)
-    # We include positives in denominator but with their weights
-    weighted_all_sim = (exp_sim * (pos_weights + neg_weights)).sum(dim=1)
-    
-    # Samples with at least one positive
-    has_positives = pos_mask.sum(dim=1) > 0
-    
-    if has_positives.sum() == 0:
-        return torch.tensor(0.0, device=z.device), torch.tensor(0.0, device=z.device)
-    
-    # InfoNCE loss: -log(weighted positive / weighted total)
-    loss = -torch.log(weighted_pos_sim[has_positives] / (weighted_all_sim[has_positives] + 1e-8))
-    loss = loss.mean()
+    # Weight the InfoNCE loss by logFC consistency
+    # Samples with similar logFC patterns (high weight) contribute more
+    weighted_losses = sample_losses * avg_pos_weight[has_positives]
+    loss = weighted_losses.mean()
     
     # Average weight for monitoring
-    avg_weight = logfc_weights[pos_mask > 0].mean() if (pos_mask > 0).any() else torch.tensor(0.0, device=z.device)
+    avg_weight = avg_pos_weight[has_positives].mean() if has_positives.any() else torch.tensor(0.0, device=z.device)
     
     return loss, avg_weight
 
