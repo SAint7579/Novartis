@@ -318,6 +318,11 @@ def predict_logfc_with_diffusion(vae_model, diffusion_model, smiles_encoder,
     print(f"  Generating {num_samples} diffusion samples...")
     generated_latents = []
     
+    # Cell line and concentration (fixed for HEK293T)
+    cell_line = torch.zeros(1, 10, device=device)
+    cell_line[0, 0] = 1.0  # HEK293T = cell line 0
+    concentration = torch.full((1, 1), 10.0, device=device)
+    
     with torch.no_grad():
         for _ in range(num_samples):
             # Expand for single sample
@@ -325,7 +330,7 @@ def predict_logfc_with_diffusion(vae_model, diffusion_model, smiles_encoder,
             smiles_batch = smiles_emb
             
             # Sample via diffusion
-            pred_latent = diffusion_model.sample(smiles_batch, baseline_batch, num_steps=100)
+            pred_latent = diffusion_model.sample(smiles_batch, baseline_batch, cell_line, concentration, num_steps=100)
             
             # Decode to expression
             pred_expr = vae_model.decode(pred_latent).cpu().numpy()
@@ -469,7 +474,9 @@ def main():
             smiles_dim=256,
             hidden_dim=512,
             num_heads=8,
-            num_timesteps=1000
+            num_timesteps=1000,
+            num_cell_lines=10,
+            concentration_dim=1
         ).to(device)
         
         diff_checkpoint = torch.load(args.diffusion, map_location='cpu', weights_only=False)

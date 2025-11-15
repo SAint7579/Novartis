@@ -90,13 +90,17 @@ class PerturbationDiffusionModel(nn.Module):
                  smiles_dim: int = 256,
                  hidden_dim: int = 512,
                  num_heads: int = 8,
-                 num_timesteps: int = 1000):
+                 num_timesteps: int = 1000,
+                 num_cell_lines: int = 10,
+                 concentration_dim: int = 1):
         super().__init__()
         
         self.latent_dim = latent_dim
         self.smiles_dim = smiles_dim
         self.hidden_dim = hidden_dim
         self.num_timesteps = num_timesteps
+        self.num_cell_lines = num_cell_lines
+        self.concentration_dim = concentration_dim
         
         # Time embedding
         self.time_embed = nn.Sequential(
@@ -112,9 +116,22 @@ class PerturbationDiffusionModel(nn.Module):
             nn.SiLU()
         )
         
-        # Condition embedding (SMILES + baseline)
+        # Cell line embedding (one-hot encoded)
+        self.cell_line_embed = nn.Sequential(
+            nn.Linear(num_cell_lines, 64),
+            nn.ReLU()
+        )
+        
+        # Concentration embedding
+        self.concentration_embed = nn.Sequential(
+            nn.Linear(concentration_dim, 64),
+            nn.ReLU()
+        )
+        
+        # Condition embedding (SMILES + baseline + cell_line + concentration)
+        condition_input_dim = smiles_dim + latent_dim + 64 + 64
         self.condition_proj = nn.Sequential(
-            nn.Linear(smiles_dim + latent_dim, hidden_dim),
+            nn.Linear(condition_input_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.SiLU()
         )
@@ -171,7 +188,9 @@ class PerturbationDiffusionModel(nn.Module):
                 x_t: torch.Tensor,
                 timesteps: torch.Tensor,
                 smiles_emb: torch.Tensor,
-                baseline_emb: torch.Tensor) -> torch.Tensor:
+                baseline_emb: torch.Tensor,
+                cell_line: torch.Tensor,
+                concentration: torch.Tensor) -> torch.Tensor:
         """
         Predict noise in noisy latent embedding.
         
@@ -185,6 +204,10 @@ class PerturbationDiffusionModel(nn.Module):
             SMILES embedding of compound
         baseline_emb : torch.Tensor [batch_size, latent_dim]
             Baseline VAE embedding
+        cell_line : torch.Tensor [batch_size, num_cell_lines]
+            One-hot encoded cell line
+        concentration : torch.Tensor [batch_size, 1]
+            Concentration value
         
         Returns:
         --------
@@ -199,8 +222,12 @@ class PerturbationDiffusionModel(nn.Module):
         x_emb = self.input_proj(x_t)  # [B, hidden_dim]
         x_emb = x_emb + t_emb  # Add time information
         
-        # Condition embedding (SMILES + baseline)
-        cond = torch.cat([smiles_emb, baseline_emb], dim=-1)
+        # Embed cell line and concentration
+        cell_emb = self.cell_line_embed(cell_line)  # [B, 64]
+        conc_emb = self.concentration_embed(concentration)  # [B, 64]
+        
+        # Condition embedding (SMILES + baseline + cell_line + concentration)
+        cond = torch.cat([smiles_emb, baseline_emb, cell_emb, conc_emb], dim=-1)
         cond_emb = self.condition_proj(cond)  # [B, hidden_dim]
         
         # Cross-attention conditioning
@@ -231,7 +258,9 @@ class PerturbationDiffusionModel(nn.Module):
                  x_t: torch.Tensor,
                  t: int,
                  smiles_emb: torch.Tensor,
-                 baseline_emb: torch.Tensor) -> torch.Tensor:
+                 baseline_emb: torch.Tensor,
+                 cell_line: torch.Tensor,
+                 concentration: torch.Tensor) -> torch.Tensor:
         """
         Reverse diffusion: denoise one step.
         
@@ -241,7 +270,7 @@ class PerturbationDiffusionModel(nn.Module):
         timesteps = torch.full((batch_size,), t, device=x_t.device, dtype=torch.long)
         
         # Predict noise
-        noise_pred = self(x_t, timesteps, smiles_emb, baseline_emb)
+        noise_pred = self(x_t, timesteps, smiles_emb, baseline_emb, cell_line, concentration)
         
         # Compute x_{t-1}
         alpha_t = self.alphas_cumprod[t]
@@ -265,6 +294,8 @@ class PerturbationDiffusionModel(nn.Module):
     def sample(self,
                smiles_emb: torch.Tensor,
                baseline_emb: torch.Tensor,
+               cell_line: torch.Tensor,
+               concentration: torch.Tensor,
                num_steps: int = None) -> torch.Tensor:
         """
         Generate post-perturbation embedding via reverse diffusion.
@@ -275,6 +306,10 @@ class PerturbationDiffusionModel(nn.Module):
             SMILES embedding
         baseline_emb : torch.Tensor [batch_size, latent_dim]
             Baseline embedding
+        cell_line : torch.Tensor [batch_size, num_cell_lines]
+            One-hot encoded cell line
+        concentration : torch.Tensor [batch_size, 1]
+            Concentration value
         num_steps : int, optional
             Number of diffusion steps (default: self.num_timesteps)
         
@@ -294,7 +329,7 @@ class PerturbationDiffusionModel(nn.Module):
         
         # Reverse diffusion
         for t in reversed(range(num_steps)):
-            x_t = self.p_sample(x_t, t, smiles_emb, baseline_emb)
+            x_t = self.p_sample(x_t, t, smiles_emb, baseline_emb, cell_line, concentration)
         
         return x_t
 

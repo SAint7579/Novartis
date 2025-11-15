@@ -25,6 +25,15 @@ from src.autoencoder.vae import preprocess_gene_expression
 from src.autoencoder.contrastive_vae import ContrastiveVAE, ContrastiveGeneExpressionDataset
 from src.autoencoder.vae import VAE
 
+# Try to import diffusion models (optional)
+try:
+    from src.diffusion.smiles_encoder import SMILESEncoder, load_smiles_dict
+    from src.diffusion.diffusion_model import PerturbationDiffusionModel
+    from src.diffusion.linear_baseline import LinearPerturbationModel
+    DIFFUSION_AVAILABLE = True
+except ImportError:
+    DIFFUSION_AVAILABLE = False
+
 # Simple predictor network
 class PerturbationPredictor(nn.Module):
     """Small NN to predict post-perturbation embedding from baseline."""
@@ -53,11 +62,10 @@ def evaluate_model_perturbation_prediction(model_path, model_type, processed_df,
     # Load checkpoint first to get config
     checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
     
-    # Get input_dim from checkpoint config if available
-    if 'config' in checkpoint and 'input_dim' in checkpoint['config']:
-        input_dim = checkpoint['config']['input_dim']
-    else:
-        input_dim = processed_df.shape[1]
+    # Get config from checkpoint
+    config = checkpoint.get('config', {})
+    input_dim = config.get('input_dim', processed_df.shape[1])
+    projection_dim = config.get('projection_dim', 128)
     
     print(f"  Using input_dim: {input_dim}")
     
@@ -73,7 +81,7 @@ def evaluate_model_perturbation_prediction(model_path, model_type, processed_df,
     if model_type == 'contrastive':
         model = ContrastiveVAE(
             input_dim=input_dim, latent_dim=64,
-            hidden_dims=[512, 256, 128], dropout=0.2, projection_dim=128
+            hidden_dims=[512, 256, 128], dropout=0.2, projection_dim=projection_dim
         )
     elif model_type == 'triplet':
         from src.autoencoder.triplet_vae import TripletVAE
@@ -194,6 +202,149 @@ def evaluate_model_perturbation_prediction(model_path, model_type, processed_df,
     return mean_corr, mean_mse, len(all_correlations)
 
 
+def evaluate_diffusion_or_linear_model(model_path, model_name, vae_model, processed_df, metadata, device='cpu'):
+    """
+    Evaluate diffusion or linear perturbation prediction models.
+    
+    These models use SMILES information directly, so no per-treatment training needed.
+    """
+    if not DIFFUSION_AVAILABLE:
+        print(f"  Skipping {model_name} (diffusion module not available)")
+        return None, None, 0
+    
+    # Load SMILES
+    smiles_file = PROJECT_ROOT / 'Dataset' / 'SMILES.txt'
+    if not smiles_file.exists():
+        print(f"  Skipping {model_name} (SMILES file not found)")
+        return None, None, 0
+    
+    smiles_dict = load_smiles_dict(str(smiles_file))
+    
+    # Load SMILES encoder and model
+    smiles_encoder = SMILESEncoder(
+        model_name='DeepChem/ChemBERTa-77M-MLM',
+        embedding_dim=256,
+        freeze_encoder=True
+    ).to(device)
+    
+    if 'diffusion' in model_name.lower():
+        pred_model = PerturbationDiffusionModel(
+            latent_dim=64, smiles_dim=256, hidden_dim=512,
+            num_heads=8, num_timesteps=1000,
+            num_cell_lines=10, concentration_dim=1
+        ).to(device)
+    else:  # linear
+        pred_model = LinearPerturbationModel(
+            latent_dim=64, smiles_dim=256, hidden_dims=[512, 512, 256]
+        ).to(device)
+    
+    checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
+    smiles_encoder.load_state_dict(checkpoint['smiles_encoder'])
+    pred_model.load_state_dict(checkpoint.get('diffusion_model' if 'diffusion' in model_name.lower() else 'linear_model'))
+    
+    smiles_encoder.eval()
+    pred_model.eval()
+    
+    # Encode all samples to latent
+    print("  Encoding samples to latent space...")
+    dataset = ContrastiveGeneExpressionDataset(processed_df, metadata['treatment'])
+    loader = DataLoader(dataset, batch_size=256, shuffle=False)
+    
+    all_latent = []
+    with torch.no_grad():
+        for batch_data, _, _ in loader:
+            mu, _ = vae_model.encode(batch_data.to(device))
+            all_latent.append(mu.cpu().numpy())
+    
+    latent_embeddings = np.vstack(all_latent)
+    
+    # Get DMSO baseline
+    dmso_mask = metadata['treatment'].str.upper() == 'DMSO'
+    dmso_latent = latent_embeddings[dmso_mask]
+    dmso_mean_latent = torch.FloatTensor(dmso_latent.mean(axis=0)).to(device)
+    dmso_expr = processed_df.values[dmso_mask]
+    dmso_mean_expr = dmso_expr.mean(axis=0)
+    
+    # Use SAME 100 treatments as VAE evaluation for fair comparison
+    treatment_counts = metadata['treatment'].value_counts()
+    eval_treatments = treatment_counts[(treatment_counts >= 2) & 
+                                       (treatment_counts.index != 'DMSO') & 
+                                       (treatment_counts.index != 'Blank') & 
+                                       (treatment_counts.index != 'RNA')].index[:100]
+    
+    # Filter to only those with SMILES
+    eval_treatments = [t for t in eval_treatments if t in smiles_dict]
+    
+    print(f"  Evaluating on {len(eval_treatments)} treatments (same as VAE protocol)")
+    
+    all_correlations = []
+    all_mses = []
+    
+    for treatment in eval_treatments:
+        if treatment not in smiles_dict:
+            continue
+        
+        treatment_mask = metadata['treatment'] == treatment
+        treatment_latent = latent_embeddings[treatment_mask]
+        treatment_expr = processed_df.values[treatment_mask]
+        
+        if len(treatment_latent) < 2:
+            continue
+        
+        # Split into train/test (only use test set)
+        if len(treatment_latent) == 2:
+            test_idx = [1]
+        else:
+            _, test_idx = train_test_split(range(len(treatment_latent)), test_size=0.33, random_state=42)
+        
+        # Get SMILES
+        smiles = smiles_dict[treatment]
+        
+        # Predict
+        with torch.no_grad():
+            # Encode SMILES
+            smiles_emb = smiles_encoder.encode_smiles(smiles)
+            
+            # Predict latents for test samples
+            n_test = len(test_idx)
+            baseline_batch = dmso_mean_latent.unsqueeze(0).expand(n_test, -1)
+            smiles_batch = smiles_emb.expand(n_test, -1)
+            
+            # Cell line and concentration (fixed for HEK293T)
+            cell_line_batch = torch.zeros(n_test, 10, device=device)
+            cell_line_batch[:, 0] = 1.0  # HEK293T = cell line 0
+            concentration_batch = torch.full((n_test, 1), 10.0, device=device)
+            
+            if 'diffusion' in model_name.lower():
+                pred_latents = pred_model.sample(smiles_batch, baseline_batch, cell_line_batch, concentration_batch, num_steps=50)
+            else:
+                pred_latents = pred_model(baseline_batch, smiles_batch)
+            
+            # Decode to expression
+            pred_expr = vae_model.decode(pred_latents).cpu().numpy()
+        
+        # Ground truth
+        true_expr = treatment_expr[test_idx]
+        
+        # Compute logFC
+        pred_logfc = pred_expr - dmso_mean_expr
+        true_logfc = true_expr - dmso_mean_expr
+        
+        # Metrics
+        for i in range(len(test_idx)):
+            corr, _ = pearsonr(pred_logfc[i], true_logfc[i])
+            mse = np.mean((pred_logfc[i] - true_logfc[i])**2)
+            
+            if not np.isnan(corr):
+                all_correlations.append(corr)
+                all_mses.append(mse)
+    
+    mean_corr = np.mean(all_correlations) if all_correlations else 0.0
+    mean_mse = np.mean(all_mses) if all_mses else 0.0
+    
+    return mean_corr, mean_mse, len(all_correlations)
+
+
 # ============================================================================
 # Main Evaluation
 # ============================================================================
@@ -252,6 +403,10 @@ print(f"Device: {device}\n")
 results = []
 
 for model_file in model_files:
+    # Skip diffusion/linear models (evaluated separately)
+    if 'diffusion_perturbation' in model_file.name or 'linear_perturbation' in model_file.name:
+        continue
+    
     print(f"{'='*70}")
     print(f"Evaluating: {model_file.name}")
     print(f"{'='*70}")
@@ -283,6 +438,73 @@ for model_file in model_files:
     print(f"  LogFC MSE: {mse:.4f}")
     print(f"  Evaluated on: {n_samples} test samples")
     print()
+
+# ============================================================================
+# Evaluate Diffusion/Linear Models (if available)
+# ============================================================================
+
+if DIFFUSION_AVAILABLE:
+    # Check for diffusion and linear models
+    diffusion_file = models_dir / 'diffusion_perturbation_best.pt'
+    linear_file = models_dir / 'linear_perturbation_best.pt'
+    
+    # Need VAE for encoding (use contrastive VAE)
+    vae_for_diffusion = ContrastiveVAE(
+        input_dim=processed_df.shape[1],
+        latent_dim=64,
+        hidden_dims=[512, 256, 128],
+        dropout=0.2,
+        projection_dim=128
+    )
+    vae_checkpoint = torch.load(PROJECT_ROOT / 'models' / 'contrastive_vae_hek293t_best.pt', 
+                                 map_location='cpu', weights_only=False)
+    vae_for_diffusion.load_state_dict(vae_checkpoint['model_state_dict'])
+    vae_for_diffusion.eval()
+    vae_for_diffusion = vae_for_diffusion.to(device)
+    
+    if diffusion_file.exists() and 'diffusion_perturbation_best.pt' not in evaluated_models:
+        print(f"{'='*70}")
+        print(f"Evaluating: diffusion_perturbation_best.pt")
+        print(f"{'='*70}")
+        
+        corr, mse, n_samples = evaluate_diffusion_or_linear_model(
+            diffusion_file, 'diffusion', vae_for_diffusion, processed_df, metadata, device
+        )
+        
+        if corr is not None:
+            results.append({
+                'model': 'diffusion_perturbation_best.pt',
+                'type': 'diffusion',
+                'logFC_correlation': corr,
+                'logFC_mse': mse,
+                'n_evaluations': n_samples
+            })
+            print(f"\n  LogFC Recovery Correlation: {corr:.4f}")
+            print(f"  LogFC MSE: {mse:.4f}")
+            print(f"  Evaluated on: {n_samples} test samples")
+            print()
+    
+    if linear_file.exists() and 'linear_perturbation_best.pt' not in evaluated_models:
+        print(f"{'='*70}")
+        print(f"Evaluating: linear_perturbation_best.pt")
+        print(f"{'='*70}")
+        
+        corr, mse, n_samples = evaluate_diffusion_or_linear_model(
+            linear_file, 'linear', vae_for_diffusion, processed_df, metadata, device
+        )
+        
+        if corr is not None:
+            results.append({
+                'model': 'linear_perturbation_best.pt',
+                'type': 'linear',
+                'logFC_correlation': corr,
+                'logFC_mse': mse,
+                'n_evaluations': n_samples
+            })
+            print(f"\n  LogFC Recovery Correlation: {corr:.4f}")
+            print(f"  LogFC MSE: {mse:.4f}")
+            print(f"  Evaluated on: {n_samples} test samples")
+            print()
 
 # Combine with existing results
 if len(results) > 0:

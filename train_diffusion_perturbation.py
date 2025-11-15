@@ -63,24 +63,35 @@ class PerturbationDataset(Dataset):
     """
     Dataset for perturbation prediction.
     
-    Returns: (baseline_latent, post_perturbation_latent, smiles_string, treatment)
+    Returns: (baseline_latent, post_perturbation_latent, smiles_string, 
+              cell_line_onehot, concentration, treatment)
     """
     
     def __init__(self, baseline_latents, perturbed_latents, 
-                 smiles_strings, treatments):
+                 smiles_strings, cell_lines, concentrations, treatments,
+                 num_cell_lines=10):
         self.baseline_latents = baseline_latents
         self.perturbed_latents = perturbed_latents
         self.smiles_strings = smiles_strings
+        self.cell_lines = cell_lines  # Integer indices
+        self.concentrations = concentrations
         self.treatments = treatments
+        self.num_cell_lines = num_cell_lines
     
     def __len__(self):
         return len(self.perturbed_latents)
     
     def __getitem__(self, idx):
+        # One-hot encode cell line
+        cell_line_onehot = torch.zeros(self.num_cell_lines)
+        cell_line_onehot[self.cell_lines[idx]] = 1.0
+        
         return (
             torch.FloatTensor(self.baseline_latents[idx]),
             torch.FloatTensor(self.perturbed_latents[idx]),
             self.smiles_strings[idx],
+            cell_line_onehot,
+            torch.FloatTensor([self.concentrations[idx]]),
             self.treatments[idx]
         )
 
@@ -150,6 +161,8 @@ def main():
     baseline_list = []
     perturbed_list = []
     smiles_list = []
+    cell_line_list = []
+    concentration_list = []
     treatment_list = []
     
     skipped = 0
@@ -166,10 +179,13 @@ def main():
         baseline_list.append(baseline_latent)
         perturbed_list.append(all_latents[idx])
         smiles_list.append(smiles)
+        cell_line_list.append(0)  # All HEK293T (cell line 0)
+        concentration_list.append(10.0)  # Fixed concentration
         treatment_list.append(treatment)
     
     print(f"Total training samples: {len(perturbed_list)}")
     print(f"Skipped {skipped} samples without SMILES")
+    print(f"Cell line: HEK293T (index 0), Concentration: 10.0")
     
     # Split train/val
     n_train = int(0.9 * len(perturbed_list))
@@ -179,14 +195,20 @@ def main():
         [baseline_list[i] for i in indices[:n_train]],
         [perturbed_list[i] for i in indices[:n_train]],
         [smiles_list[i] for i in indices[:n_train]],
-        [treatment_list[i] for i in indices[:n_train]]
+        [cell_line_list[i] for i in indices[:n_train]],
+        [concentration_list[i] for i in indices[:n_train]],
+        [treatment_list[i] for i in indices[:n_train]],
+        num_cell_lines=10
     )
     
     val_dataset = PerturbationDataset(
         [baseline_list[i] for i in indices[n_train:]],
         [perturbed_list[i] for i in indices[n_train:]],
         [smiles_list[i] for i in indices[n_train:]],
-        [treatment_list[i] for i in indices[n_train:]]
+        [cell_line_list[i] for i in indices[n_train:]],
+        [concentration_list[i] for i in indices[n_train:]],
+        [treatment_list[i] for i in indices[n_train:]],
+        num_cell_lines=10
     )
     
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
@@ -207,7 +229,9 @@ def main():
         smiles_dim=256,
         hidden_dim=512,
         num_heads=8,
-        num_timesteps=1000
+        num_timesteps=1000,
+        num_cell_lines=10,
+        concentration_dim=1
     ).to(DEVICE)
     
     print(f"SMILES Encoder params: {sum(p.numel() for p in smiles_encoder.parameters()):,}")
@@ -233,9 +257,11 @@ def main():
         diffusion_model.train()
         train_loss = 0.0
         
-        for baseline, target, smiles_strings, _ in tqdm(train_loader, desc=f"Epoch {epoch+1}/{NUM_EPOCHS}"):
+        for baseline, target, smiles_strings, cell_line, concentration, _ in tqdm(train_loader, desc=f"Epoch {epoch+1}/{NUM_EPOCHS}"):
             baseline = baseline.to(DEVICE)
             target = target.to(DEVICE)
+            cell_line = cell_line.to(DEVICE)
+            concentration = concentration.to(DEVICE)
             
             # Encode SMILES strings (batch)
             smiles_emb = smiles_encoder(list(smiles_strings))
@@ -250,7 +276,7 @@ def main():
             x_t = diffusion_model.q_sample(target, t, noise)
             
             # Predict noise
-            noise_pred = diffusion_model(x_t, t, smiles_emb, baseline)
+            noise_pred = diffusion_model(x_t, t, smiles_emb, baseline, cell_line, concentration)
             
             # Loss
             loss = nn.MSELoss()(noise_pred, noise)
@@ -273,16 +299,18 @@ def main():
         val_loss = 0.0
         
         with torch.no_grad():
-            for baseline, target, smiles_strings, _ in val_loader:
+            for baseline, target, smiles_strings, cell_line, concentration, _ in val_loader:
                 baseline = baseline.to(DEVICE)
                 target = target.to(DEVICE)
+                cell_line = cell_line.to(DEVICE)
+                concentration = concentration.to(DEVICE)
                 
                 # Encode SMILES strings
                 smiles_emb = smiles_encoder(list(smiles_strings))
                 t = torch.randint(0, diffusion_model.num_timesteps, (baseline.shape[0],), device=DEVICE)
                 noise = torch.randn_like(target)
                 x_t = diffusion_model.q_sample(target, t, noise)
-                noise_pred = diffusion_model(x_t, t, smiles_emb, baseline)
+                noise_pred = diffusion_model(x_t, t, smiles_emb, baseline, cell_line, concentration)
                 loss = nn.MSELoss()(noise_pred, noise)
                 val_loss += loss.item()
         

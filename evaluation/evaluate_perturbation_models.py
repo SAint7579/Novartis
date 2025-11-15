@@ -125,7 +125,8 @@ if DIFFUSION_MODEL.exists():
     print(f"Loading diffusion model...")
     diffusion_model = PerturbationDiffusionModel(
         latent_dim=64, smiles_dim=256, hidden_dim=512,
-        num_heads=8, num_timesteps=1000
+        num_heads=8, num_timesteps=1000,
+        num_cell_lines=10, concentration_dim=1
     ).to(DEVICE)
     
     diff_checkpoint = torch.load(DIFFUSION_MODEL, map_location='cpu', weights_only=False)
@@ -218,16 +219,19 @@ for treatment in tqdm(eval_treatments_sample, desc="Evaluating compounds"):
             
             # Predict post-perturbation latents
             n_test = len(test_idx)
+            baseline_batch = baseline_latent.unsqueeze(0).expand(n_test, -1)
+            smiles_batch = smiles_emb.expand(n_test, -1)
+            
+            # Cell line and concentration (fixed for HEK293T)
+            cell_line_batch = torch.zeros(n_test, 10, device=DEVICE)
+            cell_line_batch[:, 0] = 1.0  # HEK293T = cell line 0
+            concentration_batch = torch.full((n_test, 1), 10.0, device=DEVICE)
             
             if model_name == 'Diffusion':
                 # Generate via diffusion (single sample for speed, 50 steps)
-                baseline_batch = baseline_latent.unsqueeze(0).expand(n_test, -1)
-                smiles_batch = smiles_emb.expand(n_test, -1)
-                pred_latents = model.sample(smiles_batch, baseline_batch, num_steps=50).cpu().numpy()
+                pred_latents = model.sample(smiles_batch, baseline_batch, cell_line_batch, concentration_batch, num_steps=50).cpu().numpy()
             else:
-                # Linear model prediction
-                baseline_batch = baseline_latent.unsqueeze(0).expand(n_test, -1)
-                smiles_batch = smiles_emb.expand(n_test, -1)
+                # Linear model prediction (doesn't use cell_line/concentration)
                 pred_latents = model(baseline_batch, smiles_batch).cpu().numpy()
             
             # Decode to expression
