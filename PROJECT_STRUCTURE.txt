@@ -1,0 +1,96 @@
+Novartis Project Structure
+==========================
+
+Data:
+-----
+Dataset/
+  ├── csv/
+  │   └── HEK293T_Counts.csv          # Gene expression counts (converted from Excel)
+  ├── HEK293T_MetaData.xlsx           # Sample metadata (treatments, replicates)
+  └── HEK293T_Counts.xlsx             # Original Excel file
+
+Source Code:
+-----------
+src/
+  ├── utils/
+  │   ├── excel_to_csv_converter.py  # Convert large Excel to CSV
+  │   ├── smart_compound_scraper.py   # MCE → CAS → PubChem → SMILES
+  │   └── manual_compound_lookup.py   # Manual SMILES management
+  │
+  └── autoencoder/
+      ├── vae/                        # Standard VAE
+      │   ├── model.py
+      │   ├── train.py
+      │   ├── dataset.py
+      │   └── utils.py
+      │
+      ├── contrastive_vae/            # Contrastive VAE (InfoNCE)
+      │   ├── model.py
+      │   ├── loss.py                 # InfoNCE loss
+      │   ├── dataset.py
+      │   ├── train.py
+      │   └── utils.py
+      │
+      └── triplet_vae/                # Triplet VAE (LogFC-weighted)
+          ├── model.py
+          ├── loss.py                 # LogFC-weighted triplet loss
+          ├── dataset.py
+          └── train.py
+
+Training Scripts:
+----------------
+train_vae_hek293t.py                 # Train standard VAE
+train_contrastive_vae_hek293t.py     # Train contrastive VAE
+train_triplet_vae_hek293t.py         # Train triplet VAE
+train_all_models.py                  # Train all models sequentially
+
+Evaluation Scripts:
+------------------
+evaluation/
+  ├── run_all_evals.py                    # Run all evaluations
+  ├── visualize_all_models.py             # Generate latent plots
+  ├── evaluate_perturbation_prediction.py # LogFC recovery
+  ├── evaluate_latent_retrieval.py        # Top-k metrics
+  ├── evaluate_topk_fast.py               # Fast top-k (sampled)
+  ├── compare_vae_models.py               # Compare models
+  ├── plot_latent.py                      # Flexible plotting
+  └── visualize_latent_space.py           # Simple plotting
+
+Outputs:
+-------
+models/
+  ├── vae_hek293t_best.pt
+  ├── contrastive_vae_hek293t_best.pt
+  ├── triplet_vae_hek293t_best.pt
+  └── triplet_vae2_hek293t_best.pt
+
+latent_plots/
+  ├── *_latent.png                   # PCA visualizations
+  └── *_latent_tsne.png              # t-SNE visualizations
+
+results/
+  ├── perturbation_prediction_accuracy.csv
+  ├── *_latent_features.csv
+  ├── *_training_history.png
+  └── contrastive_vae_replicate_agreement.csv
+
+Utilities:
+---------
+scrape_smart.py                      # Smart compound scraper
+vae_notebook_snippet.py              # Copy-paste for Jupyter
+contrastive_vae_notebook_snippet.py  # Copy-paste for Jupyter
+
+Quick Commands:
+--------------
+# Train models
+python train_all_models.py
+
+# Evaluate all
+python evaluation/run_all_evals.py
+
+# Convert Excel
+python src/utils/excel_to_csv_converter.py Dataset/file.xlsx
+
+# Plot specific model
+python evaluation/plot_latent.py --model models/contrastive_vae_hek293t_best.pt
+
