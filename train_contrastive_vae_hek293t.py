@@ -7,13 +7,19 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 import sys
+import os
 from pathlib import Path
 
 # Add project root to path
 project_root = Path(__file__).parent.absolute()
 sys.path.insert(0, str(project_root))
+os.chdir(str(project_root))  # Change to project root
 
-from src.autoencoder.vae.utils import preprocess_gene_expression
+try:
+    from src.autoencoder.vae.utils import preprocess_gene_expression
+except ImportError:
+    from src.autoencoder.vae import preprocess_gene_expression
+
 from src.autoencoder.contrastive_vae import (
     ContrastiveVAE,
     train_contrastive_vae,
