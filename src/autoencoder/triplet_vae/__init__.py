@@ -12,7 +12,9 @@ from .loss import (
     compute_logfc_weights_compound_negative
 )
 from .dataset import TripletGeneExpressionDataset
+from .dataset_fast import FastTripletGeneExpressionDataset
 from .train import train_triplet_vae
+from .loss_fast import triplet_vae_loss_fast
 
 __all__ = [
     'TripletVAE',
@@ -22,6 +24,8 @@ __all__ = [
     'compute_logfc_weights_dmso_negative',
     'compute_logfc_weights_compound_negative',
     'TripletGeneExpressionDataset',
-    'train_triplet_vae'
+    'FastTripletGeneExpressionDataset',
+    'train_triplet_vae',
+    'triplet_vae_loss_fast'
 ]
 
