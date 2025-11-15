@@ -4,5 +4,4 @@ results/
 compound_mapping.csv
 compound_smiles_cache.json
 **/__pycache__/
-**/__init__.py
 latent_plots/
